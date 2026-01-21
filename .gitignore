@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+
+# Generated artifacts
+papers.db
+bm25.pkl
+
+# uv / environments
+.venv/
+.uv/
+.python-version
+
+# OS
+Thumbs.db
+.DS_Store
