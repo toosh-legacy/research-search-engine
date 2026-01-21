@@ -1,17 +1,20 @@
 import pickle
-from socket import close
 import sqlite3
+from pathlib import Path
 from rank_bm25 import BM25Okapi
 
-def tokenize(text:str) -> list[str]:
+def tokenize(text: str) -> list[str]:
     return text.lower().split()
 
-def main()-> None:
+def main() -> None:
     conn = sqlite3.connect("papers.db")
     cur = conn.cursor()
     cur.execute("SELECT paper_id, title, abstract FROM papers")
     rows = cur.fetchall()
-    conn,close()
+    conn.close()
+
+    if not rows:
+        raise RuntimeError("No rows found in papers.db. Run scripts/00_seed_sqlite.py first.")
 
     doc_ids: list[str] = []
     corpus: list[list[str]] = []
@@ -22,12 +25,13 @@ def main()-> None:
 
     bm25 = BM25Okapi(corpus)
 
-    with open("bm25.pkl", "wb") as f:
+    output_path = Path(__file__).resolve().parent.parent / "app" / "bm25.pkl"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_path, "wb") as f:
         pickle.dump({"doc_ids": doc_ids, "bm25": bm25}, f)
-    
-    print(f"Built Bm25 for {len(doc_ids)} documents -> bm25.pkl")
 
-
+    print(f"Built BM25 for {len(doc_ids)} documents -> {output_path}")
 
 if __name__ == "__main__":
     main()

@@ -14,3 +14,8 @@ bm25.pkl
 # OS
 Thumbs.db
 .DS_Store
+
+# Generated artifacts
+papers.db
+bm25.pkl
+app/bm25.pkl
