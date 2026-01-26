@@ -1,0 +1,4 @@
+# FastAPI Backend - Production Requirements
+fastapi[all]
+uvicorn[standard]
+rank-bm25

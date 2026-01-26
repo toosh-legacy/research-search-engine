@@ -3,15 +3,32 @@ import sqlite3
 import re
 from pathlib import Path
 from typing import Optional
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 # Import query expansion functions
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
 from query_expansion import expand_query, get_search_suggestions, POPULAR_SEARCHES
 
+
 app = FastAPI()
+
+# Enable CORS for React frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",  # React dev server
+        "http://localhost:3001",
+        "https://*.vercel.app",  # Vercel deployments
+        "*"  # Allow all origins in production (or restrict to your domain)
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Robust paths (works no matter where you launch uvicorn from)
 APP_DIR = Path(__file__).resolve().parent
@@ -272,17 +289,6 @@ def search(
         "total_results": len(filtered_papers),
         "results": filtered_papers
     }
-@app.get("/ui", response_class=HTMLResponse)
-def search_ui():
-    """Semantic search UI with natural language understanding."""
-    ui_path = APP_DIR / "ui_semantic.html"
-    if ui_path.exists():
-        return ui_path.read_text(encoding='utf-8')
-    # Fallback to advanced UI
-    ui_path = APP_DIR / "ui_advanced.html"
-    if ui_path.exists():
-        return ui_path.read_text(encoding='utf-8')
-    return "<h1>UI not found</h1>"
 
 @app.get("/suggestions")
 def get_suggestions(q: str = Query(default="", description="Partial query for autocomplete")):
