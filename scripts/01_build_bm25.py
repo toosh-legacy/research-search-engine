@@ -2,9 +2,17 @@ import pickle
 import sqlite3
 from pathlib import Path
 from rank_bm25 import BM25Okapi
+import re
 
 def tokenize(text: str) -> list[str]:
-    return text.lower().split()
+    """Enhanced tokenization for academic text."""
+    # Convert to lowercase
+    text = text.lower()
+    # Remove special characters but keep spaces and hyphens
+    text = re.sub(r'[^\w\s-]', ' ', text)
+    # Split on whitespace and filter out short tokens
+    tokens = [t for t in text.split() if len(t) > 2]
+    return tokens
 
 def main() -> None:
     conn = sqlite3.connect("papers.db")

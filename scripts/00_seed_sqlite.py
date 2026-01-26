@@ -48,19 +48,25 @@ def main() -> None:
             abstract TEXT,
             authors TEXT,
             categories TEXT,
+            primary_category TEXT,
             published TEXT,
             updated TEXT,
             url TEXT,
-            pdf_url TEXT
+            pdf_url TEXT,
+            fetched_at TEXT
         )
         """
     )
+    
+    # Create indexes for fast filtering
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_primary_category ON papers(primary_category)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_published ON papers(published)")
 
     cur.executemany(
         """
         INSERT OR REPLACE INTO papers
-        (paper_id, title, abstract, authors, categories, published, updated, url, pdf_url)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (paper_id, title, abstract, authors, categories, primary_category, published, updated, url, pdf_url, fetched_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -69,10 +75,12 @@ def main() -> None:
                 p["abstract"],
                 p["authors"],
                 p["categories"],
+                p["categories"].split()[0],  # First category as primary
                 p["published"],
                 p["updated"],
                 p["url"],
                 p["pdf_url"],
+                "2024-01-01T00:00:00",
             )
             for p in SAMPLE
         ],
