@@ -2,9 +2,17 @@
 __pycache__/
 *.pyc
 
+# Python
+__pycache__/
+*.pyc
+
 # Generated artifacts
 papers.db
 bm25.pkl
+app/bm25.pkl
+api/papers.db
+# Note: api/papers_data.json (small sample) is committed for Vercel
+# Large versions should not be committed - use export_for_vercel.py to generate
 
 # uv / environments
 .venv/
@@ -15,7 +23,6 @@ bm25.pkl
 Thumbs.db
 .DS_Store
 
-# Generated artifacts
-papers.db
-bm25.pkl
-app/bm25.pkl
+# Node
+node_modules/
+frontend/node_modules/

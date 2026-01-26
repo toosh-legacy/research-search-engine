@@ -47,6 +47,6 @@ with open(JSON_DEST, 'w', encoding='utf-8') as f:
     json.dump(papers, f, indent=2)
 
 file_size_mb = JSON_DEST.stat().st_size / (1024 * 1024)
-print(f"✓ Exported {len(papers)} papers to {JSON_DEST}")
-print(f"✓ File size: {file_size_mb:.2f} MB")
-print(f"✓ Ready for Vercel deployment!")
+print(f"Exported {len(papers)} papers to {JSON_DEST}")
+print(f"File size: {file_size_mb:.2f} MB")
+print(f"Ready for Vercel deployment!")

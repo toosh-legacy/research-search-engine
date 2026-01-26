@@ -86,10 +86,10 @@ function App() {
       {searchInfo && (
         <div className="search-info">
           <p>
-            Found <strong>{searchInfo.total_results}</strong> results
-            {searchInfo.expanded_terms?.length > 1 && (
+            Found <strong>{searchInfo.count}</strong> results
+            {searchInfo.query && searchInfo.query !== query && (
               <span className="expanded-terms">
-                {' '}• Expanded: {searchInfo.expanded_terms.join(', ')}
+                {' '}• Query: {searchInfo.query}
               </span>
             )}
           </p>

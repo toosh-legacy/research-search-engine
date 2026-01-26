@@ -7,14 +7,14 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || (
 export const searchPapers = async (query, filters = {}) => {
   const params = new URLSearchParams({
     q: query,
-    k: filters.limit || 10,
-    sort: filters.sort || 'relevance',
+    limit: filters.limit || 10,
+    sort_by: filters.sort || 'relevance',
     semantic: filters.semantic !== false ? 'true' : 'false',
   });
 
   if (filters.category) params.append('category', filters.category);
-  if (filters.yearFrom) params.append('year_from', filters.yearFrom);
-  if (filters.yearTo) params.append('year_to', filters.yearTo);
+  if (filters.yearFrom) params.append('year_min', filters.yearFrom);
+  if (filters.yearTo) params.append('year_max', filters.yearTo);
   if (filters.author) params.append('author', filters.author);
 
   const response = await fetch(`${API_BASE_URL}/api/search?${params}`);

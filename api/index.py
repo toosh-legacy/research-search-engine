@@ -131,14 +131,16 @@ async def search(
     year_max: Optional[int] = None,
     author: Optional[str] = None,
     sort_by: str = "relevance",
-    semantic: bool = False,
+    semantic: str = "false",
     limit: int = Query(50, ge=1, le=100)
 ):
     """Search papers with filters."""
     if not PAPERS:
-        return {"results": [], "count": 0, "query": q}
+        return {"results": [], "count": 0, "query": q, "error": "No papers loaded"}
     
-    expanded_q = expand_query(q) if semantic else q
+    # Convert semantic string to boolean
+    use_semantic = semantic.lower() in ("true", "1", "yes")
+    expanded_q = expand_query(q) if use_semantic else q
     query_tokens = tokenize(expanded_q)
     
     # BM25 scoring (use prebuilt DOC_IDS mapping if available)
@@ -252,6 +254,17 @@ async def facets():
 async def suggestions(q: str = Query(..., min_length=1)):
     """Get search suggestions."""
     return {"suggestions": get_search_suggestions(q)}
+
+@app.get("/api/health")
+async def health():
+    """Health check endpoint."""
+    return {
+        "status": "ok",
+        "papers_loaded": len(PAPERS),
+        "bm25_loaded": BM25 is not None,
+        "data_path": str(DATA_PATH),
+        "data_exists": DATA_PATH.exists()
+    }
 
 # For Vercel Python runtime the ASGI `app` object is used directly.
 # (Previously used Mangum for AWS Lambda; not required on Vercel.)
