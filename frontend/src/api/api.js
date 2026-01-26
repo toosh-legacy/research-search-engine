@@ -1,6 +1,8 @@
 // API service for communicating with FastAPI backend
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || (
+  process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8001'
+);
 
 export const searchPapers = async (query, filters = {}) => {
   const params = new URLSearchParams({
