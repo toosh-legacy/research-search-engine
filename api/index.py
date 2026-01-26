@@ -124,6 +124,7 @@ else:
         print("No prebuilt BM25 found; BM25 will be built lazily if needed")
 
 @app.get("/api/search")
+@app.get("/search")
 async def search(
     q: str = Query(..., min_length=1),
     category: Optional[str] = None,
@@ -195,6 +196,7 @@ async def search(
     }
 
 @app.get("/api/stats")
+@app.get("/stats")
 async def stats():
     """Get database statistics."""
     if not PAPERS:
@@ -224,6 +226,7 @@ async def stats():
     }
 
 @app.get("/api/facets")
+@app.get("/facets")
 async def facets():
     """Get available filter options."""
     if not PAPERS:
@@ -251,11 +254,14 @@ async def facets():
     }
 
 @app.get("/api/suggestions")
+@app.get("/suggestions")
 async def suggestions(q: str = Query(..., min_length=1)):
     """Get search suggestions."""
     return {"suggestions": get_search_suggestions(q)}
 
 @app.get("/api/health")
+@app.get("/health")
+@app.get("/")
 async def health():
     """Health check endpoint."""
     return {
@@ -266,5 +272,5 @@ async def health():
         "data_exists": DATA_PATH.exists()
     }
 
-# For Vercel Python runtime the ASGI `app` object is used directly.
-# (Previously used Mangum for AWS Lambda; not required on Vercel.)
+# For Vercel Python runtime, FastAPI app is automatically detected
+# Routes are defined without /api prefix since Vercel routes /api/* to this file
