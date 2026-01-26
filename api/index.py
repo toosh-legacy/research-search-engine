@@ -8,6 +8,8 @@ from typing import Optional
 import pickle
 import os
 import urllib.request
+import gzip
+import tempfile
 
 # Copy the query expansion code inline for Vercel
 POPULAR_SEARCHES = [
@@ -45,16 +47,62 @@ DATA_PATH = BASE_DIR / "papers_data.json"
 PAPERS = []
 PAPERS_BY_ID = {}
 
-if DATA_PATH.exists():
-    print(f"Loading papers from {DATA_PATH}...")
-    with open(DATA_PATH, 'r', encoding='utf-8') as f:
-        raw = json.load(f)
-
+def load_papers_data():
+    """Load papers data from local file or download from external storage."""
+    global PAPERS, PAPERS_BY_ID
+    
+    # Try to load from local file first
+    if DATA_PATH.exists():
+        print(f"Loading papers from local file: {DATA_PATH}...")
+        with open(DATA_PATH, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+    else:
+        # Try to download from external storage
+        PAPERS_DATA_URL = os.environ.get('PAPERS_DATA_URL')
+        if PAPERS_DATA_URL:
+            try:
+                print(f"Downloading papers data from {PAPERS_DATA_URL}...")
+                
+                # Download to temp file
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.json.gz') as tmp:
+                    urllib.request.urlretrieve(PAPERS_DATA_URL, tmp.name)
+                    tmp_path = tmp.name
+                
+                # Check if it's compressed
+                try:
+                    with gzip.open(tmp_path, 'rt', encoding='utf-8') as f:
+                        raw = json.load(f)
+                    print("Loaded compressed JSON file")
+                except (gzip.BadGzipFile, OSError):
+                    # Not compressed, try as regular JSON
+                    with open(tmp_path, 'r', encoding='utf-8') as f:
+                        raw = json.load(f)
+                    print("Loaded uncompressed JSON file")
+                
+                # Save locally for future use
+                with open(DATA_PATH, 'w', encoding='utf-8') as f:
+                    json.dump(raw, f, ensure_ascii=False, separators=(',', ':'))
+                print(f"Saved to {DATA_PATH} for future use")
+                
+                # Clean up temp file
+                os.unlink(tmp_path)
+            except Exception as e:
+                print(f"Failed to download papers data: {e}")
+                print("WARNING: papers_data.json not found and download failed")
+                return
+        else:
+            print("WARNING: papers_data.json not found and PAPERS_DATA_URL not set")
+            return
+    
+    # Process papers
     for item in raw:
         pid = item.get('paper_id') or item.get('id') or item.get('paperId')
+        if not pid:
+            continue
+            
         categories = item.get('categories') or item.get('category') or ''
         # normalize primary category
-        primary = item.get('primary_category')
+        primary = item.get('primary_category') or item.get('category') or ''
         if not primary and categories:
             # categories may be comma or space separated
             cats = [c.strip() for c in re.split(r"[\s,]+", categories) if c.strip()]
@@ -76,8 +124,9 @@ if DATA_PATH.exists():
 
     PAPERS_BY_ID = {p['id']: p for p in PAPERS if p.get('id')}
     print(f"Loaded {len(PAPERS)} papers")
-else:
-    print("WARNING: papers_data.json not found")
+
+# Load papers on startup
+load_papers_data()
 
 def tokenize(text: str) -> list[str]:
     """Enhanced tokenization for academic text."""
