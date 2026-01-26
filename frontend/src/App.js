@@ -26,9 +26,12 @@ function App() {
   const [searchInfo, setSearchInfo] = useState(null);
 
   useEffect(() => {
-    // Load stats and facets on mount
-    getStats().then(setStats).catch(console.error);
-    getFacets().then(setFacets).catch(console.error);
+    getStats().then(setStats).catch((e) => {
+      console.error('[arXiv-Intelli] getStats failed', e);
+    });
+    getFacets().then(setFacets).catch((e) => {
+      console.error('[arXiv-Intelli] getFacets failed', e);
+    });
   }, []);
 
   const handleSearch = async (searchQuery) => {
@@ -80,6 +83,7 @@ function App() {
       {error && (
         <div className="error-message">
           <p>❌ {error}</p>
+          <p className="error-hint">Open DevTools (F12) → Console, look for <code>[arXiv-Intelli API]</code> logs. Copy those when reporting bugs. See DEBUG.md.</p>
         </div>
       )}
 

@@ -36,17 +36,20 @@ gh release create v1.0.0 api/papers_data.json.gz --title "Full Papers Database"
 
 Then get the URL from the release page.
 
-## Step 3: Set Vercel Environment Variable
+## Step 3: Set Vercel Environment Variables
 
 1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
 2. Select your project
 3. Go to **Settings** → **Environment Variables**
-4. Click **"Add New"**
-5. Fill in:
+
+**Important:** The frontend and API are both on the same Vercel app. The frontend calls `/api/*` on your Vercel URL (same origin). **Do NOT set `REACT_APP_API_URL`** — and **delete it if it exists** (e.g. `https://your-backend-api.com`). That placeholder causes CORS errors and "Failed to fetch".
+
+4. Add **only** this variable:
    - **Key**: `PAPERS_DATA_URL`
    - **Value**: The GitHub Releases URL from Step 2
-   - **Environment**: Select **Production** (and Preview if you want)
-6. Click **"Save"**
+   - **Environment**: Production (and Preview if you want)
+5. Click **"Save"**
+6. **Remove** `REACT_APP_API_URL` if present (⋯ → Delete).
 
 ## Step 4: Deploy to Vercel
 
@@ -89,6 +92,13 @@ You should see:
 4. Try a search! It should now search through all your papers.
 
 ## Troubleshooting
+
+### CORS / "Failed to fetch" / "your-backend-api.com"
+
+You see `Access to fetch at 'https://your-backend-api.com/api/...' has been blocked by CORS policy`.
+
+- **Cause:** `REACT_APP_API_URL` is set to a placeholder like `https://your-backend-api.com`. The real API lives on your Vercel app at `https://your-app.vercel.app/api/...`.
+- **Fix:** In Vercel → Project → **Settings** → **Environment Variables**, **delete** `REACT_APP_API_URL`. Redeploy. The frontend will use same-origin (`/api/...`) and CORS goes away.
 
 ### "papers_loaded: 0"
 - Check Vercel function logs (Dashboard → Your Project → Functions → View Logs)
