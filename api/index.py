@@ -2,8 +2,7 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 import sys
-import sqlite3
-import pickle
+import json
 import re
 from pathlib import Path
 from typing import Optional
@@ -37,59 +36,44 @@ app.add_middleware(
 
 # Paths
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "papers.db"
-BM25_PATH = BASE_DIR / "bm25.pkl"
+DATA_PATH = BASE_DIR / "papers_data.json"
+
+# Load papers data
+PAPERS = []
+PAPERS_BY_ID = {}
+
+if DATA_PATH.exists():
+    print(f"Loading papers from {DATA_PATH}...")
+    with open(DATA_PATH, 'r', encoding='utf-8') as f:
+        PAPERS = json.load(f)
+    PAPERS_BY_ID = {p['id']: p for p in PAPERS}
+    print(f"✓ Loaded {len(PAPERS)} papers")
+else:
+    print("WARNING: papers_data.json not found")
 
 def tokenize(text: str) -> list[str]:
     """Enhanced tokenization for academic text."""
+    if not text:
+        return []
     text = text.lower()
     text = re.sub(r'[^\w\s-]', ' ', text)
     tokens = [t for t in text.split() if len(t) > 2]
     return tokens
 
 def build_bm25_index():
-    """Build BM25 index from database."""
-    print("Building BM25 index from database...")
+    """Build BM25 index from papers data."""
     from rank_bm25 import BM25Okapi
     
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    
-    rows = c.execute("SELECT id, title, abstract FROM papers ORDER BY id").fetchall()
-    conn.close()
-    
-    doc_ids = []
     corpus = []
-    
-    for paper_id, title, abstract in rows:
-        doc_ids.append(paper_id)
-        combined = f"{title or ''} {abstract or ''}"
+    for paper in PAPERS:
+        combined = f"{paper.get('title', '')} {paper.get('abstract', '')}"
         tokens = tokenize(combined)
         corpus.append(tokens)
     
-    bm25 = BM25Okapi(corpus)
-    
-    with open(BM25_PATH, "wb") as f:
-        pickle.dump({"doc_ids": doc_ids, "bm25": bm25}, f)
-    
-    print(f"✓ BM25 index built with {len(doc_ids)} papers")
-    return doc_ids, bm25
+    return BM25Okapi(corpus)
 
-# Load or build BM25 index
-if DB_PATH.exists():
-    if not BM25_PATH.exists():
-        print("Building BM25 index...")
-        DOC_IDS, BM25 = build_bm25_index()
-    else:
-        with open(BM25_PATH, "rb") as f:
-            state = pickle.load(f)
-        DOC_IDS = state["doc_ids"]
-        BM25 = state["bm25"]
-else:
-    # Fallback for deployment - empty index
-    DOC_IDS = []
-    BM25 = None
-    print("WARNING: papers.db not found. Search will not work.")
+# Build BM25 index on startup
+BM25 = build_bm25_index() if PAPERS else None
 
 @app.get("/api/search")
 async def search(
@@ -103,7 +87,7 @@ async def search(
     limit: int = Query(50, ge=1, le=100)
 ):
     """Search papers with filters."""
-    if not DB_PATH.exists():
+    if not PAPERS:
         return {"results": [], "count": 0, "query": q}
     
     expanded_q = expand_query(q) if semantic else q
@@ -112,62 +96,38 @@ async def search(
     # BM25 scoring
     if BM25 and query_tokens:
         scores = BM25.get_scores(query_tokens)
-        scored = [(doc_id, score) for doc_id, score in zip(DOC_IDS, scores)]
+        scored = [(i, score) for i, score in enumerate(scores)]
         scored.sort(key=lambda x: x[1], reverse=True)
-        top_ids = [doc_id for doc_id, _ in scored[:limit * 2]]
-    else:
-        top_ids = DOC_IDS[:limit * 2]
-    
-    # Build SQL query with filters
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    
-    sql = "SELECT id, title, authors, abstract, published, pdf_url, arxiv_id, category FROM papers WHERE id IN ({})".format(
-        ','.join('?' * len(top_ids))
-    )
-    
-    filters = []
-    params = list(top_ids)
-    
-    if category:
-        filters.append("category = ?")
-        params.append(category)
-    if year_min:
-        filters.append("CAST(substr(published, 1, 4) AS INTEGER) >= ?")
-        params.append(year_min)
-    if year_max:
-        filters.append("CAST(substr(published, 1, 4) AS INTEGER) <= ?")
-        params.append(year_max)
-    if author:
-        filters.append("authors LIKE ?")
-        params.append(f"%{author}%")
-    
-    if filters:
-        sql += " AND " + " AND ".join(filters)
-    
-    c.execute(sql, params)
-    rows = c.fetchall()
-    conn.close()
-    
-    # Re-sort by BM25 score
-    id_to_row = {row[0]: row for row in rows}
-    results = []
-    
-    for doc_id in top_ids:
-        if doc_id in id_to_row:
-            row = id_to_row[doc_id]
-            results.append({
-                "id": row[0],
-                "title": row[1],
-                "authors": row[2],
-                "abstract": row[3],
-                "published": row[4],
-                "pdf_url": row[5],
-                "arxiv_id": row[6],
-                "category": row[7]
-            })
+        
+        # Get top results
+        results = []
+        for idx, score in scored:
             if len(results) >= limit:
                 break
+            
+            paper = PAPERS[idx]
+            
+            # Apply filters
+            if category and paper.get('category') != category:
+                continue
+            
+            if year_min or year_max:
+                try:
+                    year = int(paper.get('published', '')[:4])
+                    if year_min and year < year_min:
+                        continue
+                    if year_max and year > year_max:
+                        continue
+                except (ValueError, IndexError):
+                    continue
+            
+            if author and author.lower() not in paper.get('authors', '').lower():
+                continue
+            
+            results.append(paper)
+    else:
+        # No query tokens, return first N papers
+        results = PAPERS[:limit]
     
     return {
         "results": results,
@@ -178,49 +138,57 @@ async def search(
 @app.get("/api/stats")
 async def stats():
     """Get database statistics."""
-    if not DB_PATH.exists():
+    if not PAPERS:
         return {"total_papers": 0, "categories": {}, "year_range": [0, 0]}
     
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
+    # Count categories
+    categories = {}
+    years = []
     
-    total = c.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
+    for paper in PAPERS:
+        cat = paper.get('category')
+        if cat:
+            categories[cat] = categories.get(cat, 0) + 1
+        
+        try:
+            year = int(paper.get('published', '')[:4])
+            years.append(year)
+        except (ValueError, IndexError):
+            pass
     
-    cat_counts = c.execute(
-        "SELECT category, COUNT(*) FROM papers GROUP BY category ORDER BY COUNT(*) DESC"
-    ).fetchall()
-    
-    years = c.execute(
-        "SELECT MIN(CAST(substr(published, 1, 4) AS INTEGER)), MAX(CAST(substr(published, 1, 4) AS INTEGER)) FROM papers"
-    ).fetchone()
-    
-    conn.close()
+    year_range = [min(years), max(years)] if years else [2000, 2024]
     
     return {
-        "total_papers": total,
-        "categories": {cat: count for cat, count in cat_counts},
-        "year_range": list(years)
+        "total_papers": len(PAPERS),
+        "categories": categories,
+        "year_range": year_range
     }
 
 @app.get("/api/facets")
 async def facets():
     """Get available filter options."""
-    if not DB_PATH.exists():
+    if not PAPERS:
         return {"categories": [], "year_range": [2000, 2024]}
     
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
+    categories = set()
+    years = []
     
-    cats = c.execute("SELECT DISTINCT category FROM papers ORDER BY category").fetchall()
-    years = c.execute(
-        "SELECT MIN(CAST(substr(published, 1, 4) AS INTEGER)), MAX(CAST(substr(published, 1, 4) AS INTEGER)) FROM papers"
-    ).fetchone()
+    for paper in PAPERS:
+        cat = paper.get('category')
+        if cat:
+            categories.add(cat)
+        
+        try:
+            year = int(paper.get('published', '')[:4])
+            years.append(year)
+        except (ValueError, IndexError):
+            pass
     
-    conn.close()
+    year_range = [min(years), max(years)] if years else [2000, 2024]
     
     return {
-        "categories": [c[0] for c in cats if c[0]],
-        "year_range": list(years) if years[0] else [2000, 2024]
+        "categories": sorted(list(categories)),
+        "year_range": year_range
     }
 
 @app.get("/api/suggestions")
