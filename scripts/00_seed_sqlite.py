@@ -1,4 +1,10 @@
 import sqlite3
+import json
+from pathlib import Path
+
+# This script seeds a SQLite database at the repository root named 'papers.db'.
+# It prefers to load JSON data if available (api/papers_data.json or papers_data.json),
+# otherwise it falls back to a small SAMPLE for quick testing.
 
 SAMPLE = [
     {
@@ -11,35 +17,41 @@ SAMPLE = [
         "updated": "2017-12-05",
         "url": "https://arxiv.org/abs/1706.03762",
         "pdf_url": "https://arxiv.org/pdf/1706.03762.pdf",
-    },
-    {
-        "paper_id": "p2",
-        "title": "A Survey on Graph Neural Networks",
-        "abstract": "This survey provides a comprehensive overview of graph neural networks and their applications.",
-        "authors": "Wu, Pan, Chen",
-        "categories": "cs.LG",
-        "published": "2019-01-01",
-        "updated": "2020-10-01",
-        "url": "https://arxiv.org/abs/1901.00596",
-        "pdf_url": "https://arxiv.org/pdf/1901.00596.pdf",
-    },
-    {
-        "paper_id": "p3",
-        "title": "Deep Reinforcement Learning with Double Q-learning",
-        "abstract": "We show how to reduce overestimation by decoupling action selection and evaluation in Q-learning.",
-        "authors": "van Hasselt, Guez, Silver",
-        "categories": "cs.LG cs.AI",
-        "published": "2015-09-01",
-        "updated": "2016-01-01",
-        "url": "https://arxiv.org/abs/1509.06461",
-        "pdf_url": "https://arxiv.org/pdf/1509.06461.pdf",
-    },
+    }
 ]
 
-def main() -> None:
-    conn = sqlite3.connect("papers.db")
-    cur = conn.cursor()
 
+def load_json_data(repo_root: Path) -> list[dict]:
+    # Prefer api/papers_data.json, then top-level papers_data.json
+    candidates = [repo_root / "api" / "papers_data.json", repo_root / "papers_data.json"]
+    for p in candidates:
+        if p.exists():
+            print(f"Loading JSON data from {p}")
+            with open(p, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            # Normalize keys if needed
+            normalized = []
+            for item in data:
+                # support both 'id' and 'paper_id'
+                pid = item.get("paper_id") or item.get("id")
+                normalized.append({
+                    "paper_id": pid,
+                    "title": item.get("title", ""),
+                    "abstract": item.get("abstract", ""),
+                    "authors": item.get("authors", ""),
+                    "categories": item.get("category") or item.get("categories") or "",
+                    "published": item.get("published") or item.get("date") or "",
+                    "updated": item.get("updated", ""),
+                    "url": item.get("url", ""),
+                    "pdf_url": item.get("pdf_url") or item.get("pdf", ""),
+                })
+            return normalized
+    print("No JSON data found; falling back to SAMPLE")
+    return SAMPLE
+
+
+def ensure_schema(conn: sqlite3.Connection):
+    cur = conn.cursor()
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS papers (
@@ -57,10 +69,43 @@ def main() -> None:
         )
         """
     )
-    
-    # Create indexes for fast filtering
     cur.execute("CREATE INDEX IF NOT EXISTS idx_primary_category ON papers(primary_category)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_published ON papers(published)")
+    conn.commit()
+
+
+def main() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+    db_path = repo_root / "papers.db"
+
+    data = load_json_data(repo_root)
+
+    conn = sqlite3.connect(db_path)
+    ensure_schema(conn)
+    cur = conn.cursor()
+
+    rows = []
+    for p in data:
+        primary = ""
+        if p.get("categories"):
+            # categories may be space or comma separated
+            cats = [c.strip() for c in __import__("re").split(r"[\s,]+", p["categories"]) if c.strip()]
+            primary = cats[0] if cats else ""
+        rows.append(
+            (
+                p.get("paper_id"),
+                p.get("title"),
+                p.get("abstract"),
+                p.get("authors"),
+                p.get("categories"),
+                primary,
+                p.get("published"),
+                p.get("updated"),
+                p.get("url"),
+                p.get("pdf_url"),
+                "1970-01-01T00:00:00",
+            )
+        )
 
     cur.executemany(
         """
@@ -68,27 +113,13 @@ def main() -> None:
         (paper_id, title, abstract, authors, categories, primary_category, published, updated, url, pdf_url, fetched_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        [
-            (
-                p["paper_id"],
-                p["title"],
-                p["abstract"],
-                p["authors"],
-                p["categories"],
-                p["categories"].split()[0],  # First category as primary
-                p["published"],
-                p["updated"],
-                p["url"],
-                p["pdf_url"],
-                "2024-01-01T00:00:00",
-            )
-            for p in SAMPLE
-        ],
+        rows,
     )
 
     conn.commit()
     conn.close()
-    print(f"Seeded SQLite with {len(SAMPLE)} papers -> papers.db")
+    print(f"Seeded SQLite with {len(rows)} papers -> {db_path}")
+
 
 if __name__ == "__main__":
     main()

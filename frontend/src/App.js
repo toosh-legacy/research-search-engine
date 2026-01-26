@@ -60,7 +60,7 @@ function App() {
     <div className="App">
       <div className="header">
         <div className="header-content">
-          <h1>Research Search</h1>
+          <h1>arXiv-Intelli</h1>
           <p className="subtitle">AI-powered semantic search across 80,000+ research papers</p>
         </div>
       </div>

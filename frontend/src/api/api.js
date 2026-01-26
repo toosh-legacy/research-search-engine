@@ -17,7 +17,7 @@ export const searchPapers = async (query, filters = {}) => {
   if (filters.yearTo) params.append('year_to', filters.yearTo);
   if (filters.author) params.append('author', filters.author);
 
-  const response = await fetch(`${API_BASE_URL}/search?${params}`);
+  const response = await fetch(`${API_BASE_URL}/api/search?${params}`);
   if (!response.ok) {
     throw new Error('Search failed');
   }
@@ -25,7 +25,7 @@ export const searchPapers = async (query, filters = {}) => {
 };
 
 export const getStats = async () => {
-  const response = await fetch(`${API_BASE_URL}/stats`);
+  const response = await fetch(`${API_BASE_URL}/api/stats`);
   if (!response.ok) {
     throw new Error('Failed to fetch stats');
   }
@@ -33,7 +33,7 @@ export const getStats = async () => {
 };
 
 export const getFacets = async () => {
-  const response = await fetch(`${API_BASE_URL}/facets`);
+  const response = await fetch(`${API_BASE_URL}/api/facets`);
   if (!response.ok) {
     throw new Error('Failed to fetch facets');
   }
@@ -42,7 +42,7 @@ export const getFacets = async () => {
 
 export const getSuggestions = async (query) => {
   const params = new URLSearchParams({ q: query });
-  const response = await fetch(`${API_BASE_URL}/suggestions?${params}`);
+  const response = await fetch(`${API_BASE_URL}/api/suggestions?${params}`);
   if (!response.ok) {
     throw new Error('Failed to fetch suggestions');
   }
