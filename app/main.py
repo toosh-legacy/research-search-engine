@@ -37,21 +37,49 @@ REPO_ROOT = APP_DIR.parent
 BM25_PATH = APP_DIR / "bm25.pkl"
 DB_PATH = REPO_ROOT / "papers.db"
 
-if not BM25_PATH.exists():
-    raise RuntimeError(
-        f"Missing BM25 index: {BM25_PATH}. Build it with: uv run python scripts/01_build_bm25.py"
-    )
+def build_bm25_index():
+    """Build BM25 index from database."""
+    print("Building BM25 index from database...")
+    from rank_bm25 import BM25Okapi
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    rows = c.execute("SELECT id, title, abstract FROM papers ORDER BY id").fetchall()
+    conn.close()
+    
+    doc_ids = []
+    corpus = []
+    
+    for paper_id, title, abstract in rows:
+        doc_ids.append(paper_id)
+        combined = f"{title or ''} {abstract or ''}"
+        tokens = tokenize(combined)
+        corpus.append(tokens)
+    
+    bm25 = BM25Okapi(corpus)
+    
+    with open(BM25_PATH, "wb") as f:
+        pickle.dump({"doc_ids": doc_ids, "bm25": bm25}, f)
+    
+    print(f"✓ BM25 index built with {len(doc_ids)} papers")
+    return doc_ids, bm25
 
+# Check database exists
 if not DB_PATH.exists():
     raise RuntimeError(
-        f"Missing database: {DB_PATH}. Create it with: uv run python scripts/00_seed_sqlite.py"
+        f"Missing database: {DB_PATH}. Upload papers.db to your deployment."
     )
 
-with open(BM25_PATH, "rb") as f:
-    state = pickle.load(f)
-
-DOC_IDS = state["doc_ids"]
-BM25 = state["bm25"]
+# Load or build BM25 index
+if not BM25_PATH.exists():
+    print(f"BM25 index not found. Building from database...")
+    DOC_IDS, BM25 = build_bm25_index()
+else:
+    with open(BM25_PATH, "rb") as f:
+        state = pickle.load(f)
+    DOC_IDS = state["doc_ids"]
+    BM25 = state["bm25"]
 
 def tokenize(text: str) -> list[str]:
     """Enhanced tokenization for academic text."""
